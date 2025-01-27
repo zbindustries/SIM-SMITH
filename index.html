@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sim Companies Marketplace</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    .hidden { display: none; }
+    button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+    input { padding: 8px; margin: 10px 0; width: 80%; }
+    .notification { margin-top: 20px; padding: 10px; background-color: #e7f5e7; border: 1px solid green; }
+    body {
+      background: url('https://example.com/space-image.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+  </style>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
+</head>
+<body>
+  <!-- Welcome Screen -->
+  <div id="welcome-screen">
+    <h1>Welcome to Sim Companies Marketplace</h1>
+    <button onclick="showPage('auth-screen')">Click to Continue</button>
+  </div>
+
+  <!-- Authentication Options -->
+  <div id="auth-screen" class="hidden">
+    <button onclick="showPage('register-screen')">Register</button>
+    <button onclick="showPage('login-screen')">Login</button>
+  </div>
+
+  <!-- Registration Screen -->
+  <div id="register-screen" class="hidden">
+    <h2>Register</h2>
+    <input id="reg-username" type="text" placeholder="Sim Companies Username" />
+    <input id="reg-email" type="email" placeholder="Email ID" />
+    <input id="reg-password" type="password" placeholder="Password" />
+    <button onclick="register()">Register</button>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="hidden">
+    <h2>Login</h2>
+    <input id="login-email" type="email" placeholder="Email ID" />
+    <input id="login-password" type="password" placeholder="Password" />
+    <button onclick="login()">Login</button>
+  </div>
+
+  <!-- Marketplace Screen -->
+  <div id="marketplace-screen" class="hidden">
+    <h2>Marketplace</h2>
+    <button onclick="showPage('sell-screen')">Sell</button>
+    <button onclick="showPage('buy-screen')">Buy</button>
+    <div id="notification-area"></div>
+  </div>
+
+  <!-- Sell Product Screen -->
+  <div id="sell-screen" class="hidden">
+    <h2>Sell a Product</h2>
+    <input id="product-name" type="text" placeholder="Product Name" />
+    <input id="product-quality" type="text" placeholder="Quality" />
+    <input id="product-quantity" type="number" placeholder="Quantity" />
+    <button onclick="sellProduct()">Sell</button>
+  </div>
+
+  <!-- Buy Product Screen -->
+  <div id="buy-screen" class="hidden">
+    <h2>Available Products</h2>
+    <div id="product-list"></div>
+  </div>
+
+  <!-- Firebase Configuration -->
+  <script>
+    // Your Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDnh8iEndDRbBQsUfIsg0ilvAAUQMhN0SM",
+      authDomain: "sim-companies-d5426.firebaseapp.com",
+      databaseURL: "https://sim-companies-d5426-default-rtdb.firebaseio.com/",
+      projectId: "sim-companies-d5426",
+      storageBucket: "sim-companies-d5426.appspot.com",
+      messagingSenderId: "518528774011",
+      appId: "1:518528774011:web:e4294b6b31ef217fd897de",
+      measurementId: "G-TPCE3D3VKB"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database(app);
+
+    let loggedInUser = null;
+
+    // Show specific page
+    function showPage(pageId) {
+      document.querySelectorAll('div').forEach(div => div.classList.add('hidden'));
+      document.getElementById(pageId).classList.remove('hidden');
+    }
+
+    // Register a new user
+    function register() {
+      const username = document.getElementById('reg-username').value;
+      const email = document.getElementById('reg-email').value;
+      const password = document.getElementById('reg-password').value;
+
+      auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          const user = userCredential.user;
+          db.ref('users/' + user.uid).set({
+            username: username,
+            email: email
+          });
+          alert('Registration Successful! Please Login.');
+          showPage('login-screen');
+        })
+        .catch((error) => {
+          alert(error.message);
+        });
+    }
+
+    // Login the user
+    function login() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          const user = userCredential.user;
+          loggedInUser = user.uid;
+          alert(`Welcome, ${user.email}!`);
+          showPage('marketplace-screen');
+          updateNotifications();
+        })
+        .catch((error) => {
+          alert(error.message);
+        });
+    }
+
+    // Sell a product
+    function sellProduct() {
+      const name = document.getElementById('product-name').value;
+      const quality = document.getElementById('product-quality').value;
+      const quantity = document.getElementById('product-quantity').value;
+
+      if (!name || !quality || !quantity) {
+        alert('Please fill all fields!');
+        return;
+      }
+
+      const newProductRef = db.ref('products').push();
+      newProductRef.set({
+        name: name,
+        quality: quality,
+        quantity: parseInt(quantity),
+        sellerId: loggedInUser
+      });
+
+      alert('Product listed for sale!');
+      showPage('marketplace-screen');
+      displayProducts();
+    }
+
+    // Display available products
+    function displayProducts() {
+      const productList = document.getElementById('product-list');
+      productList.innerHTML = '';
+
+      db.ref('products').once('value', snapshot => {
+        snapshot.forEach(childSnapshot => {
+          const product = childSnapshot.val();
+          const productDiv = document.createElement('div');
+          productDiv.innerHTML = `
+            <p><b>Name:</b> ${product.name}</p>
+            <p><b>Quality:</b> ${product.quality}</p>
+            <p><b>Quantity:</b> ${product.quantity}</p>
+            <button onclick="buyProduct('${childSnapshot.key}')">Buy</button>
+            <hr>
+          `;
+          productList.appendChild(productDiv);
+        });
+      });
+    }
+
+    // Buy a product
+    function buyProduct(productId) {
+      const quantity = prompt("Enter quantity to buy:");
+
+      if (quantity <= 0) {
+        alert('Invalid quantity!');
+        return;
+      }
+
+      db.ref('products/' + productId).once('value', snapshot => {
+        const product = snapshot.val();
+
+        if (quantity > product.quantity) {
+          alert('Not enough stock available!');
+        } else {
+          const updatedQuantity = product.quantity - quantity;
+          db.ref('products/' + productId).update({ quantity: updatedQuantity });
+
+          // Send notifications to both buyer and seller
+          db.ref('notifications/' + loggedInUser).push().set({
+            message: `You have successfully bought ${quantity} of ${product.name}.`
+          });
+
+          const sellerId = product.sellerId;
+          db.ref('notifications/' + sellerId).push().set({
+            message: `Your product ${product.name} has been sold.`
+          });
+
+          alert('Order placed successfully!');
+        }
+      });
+    }
+
+    // Update notifications
+    function updateNotifications() {
+      const notificationArea = document.getElementById('notification-area');
+      notificationArea.innerHTML = '';
+
+      db.ref('notifications/' + loggedInUser).once('value', snapshot => {
+        snapshot.forEach(childSnapshot => {
+          const notification = childSnapshot.val();
+          const notificationDiv = document.createElement('div');
+          notificationDiv.classList.add('notification');
+          notificationDiv.innerHTML = notification.message;
+          notificationArea.appendChild(notificationDiv);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
